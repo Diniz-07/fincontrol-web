@@ -1,20 +1,16 @@
-// --- script.js (VERSÃO FINAL COMPLETA - NGROK E SALDO GERAL) ---
+// --- script.js (VERSÃO FINAL COMPLETA - NGROK E SALDO ACUMULADO REAL) ---
 
 const URL_BACKEND = 'https://raye-bloomy-connectedly.ngrok-free.dev'; 
 const usuarioId = localStorage.getItem('usuarioId');
 const usuarioNome = localStorage.getItem('usuarioNome');
 
-// 1. PROTEÇÃO DE ROTA
 if (!usuarioId) { window.location.href = 'login.html'; }
 
-// 2. CONFIGURAÇÃO DOS ALERTAS
 const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true, background: '#161b22', color: '#fff', iconColor: '#3b82f6' });
 
-// 3. CABEÇALHOS DO NGROK
 const headersPadrao = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
 const headersGet = { 'ngrok-skip-browser-warning': 'true' };
 
-// 4. MOTOR DE ÍCONES
 function obterIcone(descricao) {
     const desc = descricao.toLowerCase();
     if (desc.includes('salario') || desc.includes('pix')) return '<i class="bi bi-cash-stack text-success me-2"></i>';
@@ -27,7 +23,6 @@ function obterIcone(descricao) {
     return '<i class="bi bi-dot text-muted me-2"></i>';
 }
 
-// 5. INICIALIZAÇÃO DA TELA
 document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('nome-usuario-logado').innerText = usuarioNome;
     const inputMes = document.getElementById('filtroMes');
@@ -36,17 +31,15 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarPainel();
 });
 
-// VARIÁVEIS GLOBAIS DE SALDO
 let meuGrafico = null;
-let totalReceitasGlobal = 0, totalDespesasGlobal = 0; // Para o mês
-let totalReceitasGeral = 0, totalDespesasGeral = 0;   // Para todo o período
+let totalReceitasGlobal = 0, totalDespesasGlobal = 0; // Somente do mês
+let totalReceitasGeral = 0, totalDespesasGeral = 0;   // Acumulado de todos os meses até o selecionado
 
 function formatarReais(valor) { return parseFloat(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function formatarData(dataString) { return dataString ? dataString.split('-').reverse().join('/') : '-'; }
 window.limparForm = function(formId, idInput) { document.getElementById(formId).reset(); document.getElementById(idInput).value = ''; };
 window.sairDoSistema = function() { localStorage.clear(); window.location.href = 'login.html'; }
 
-// 6. GRÁFICO RESUMO (Apenas do Mês)
 function atualizarGrafico() {
     const ctx = document.getElementById('graficoResumo').getContext('2d');
     if(meuGrafico) meuGrafico.destroy(); 
@@ -54,20 +47,22 @@ function atualizarGrafico() {
         meuGrafico = new Chart(ctx, { type: 'doughnut', data: { datasets: [{ data: [1], backgroundColor: ['#30363d'] }] }, options: { cutout: '80%', plugins: { tooltip: { enabled: false } } } }); 
         return; 
     }
-    meuGrafico = new Chart(ctx, { type: 'doughnut', data: { labels: ['Entradas', 'Saídas'], datasets: [{ data: [totalReceitasGlobal, totalDespesasGlobal], backgroundColor: ['#00ff88', '#ff4d4d'], hoverOffset: 4, borderWidth: 0 }] }, options: { cutout: '75%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
+    meuGrafico = new Chart(ctx, { type: 'doughnut', data: { labels: ['Entradas no Mês', 'Saídas no Mês'], datasets: [{ data: [totalReceitasGlobal, totalDespesasGlobal], backgroundColor: ['#00ff88', '#ff4d4d'], hoverOffset: 4, borderWidth: 0 }] }, options: { cutout: '75%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
 }
 
-// 7. BUSCA DE DADOS E CÁLCULOS
 async function carregarReceitas() {
     const res = await fetch(`${URL_BACKEND}/receitas`, { headers: headersGet });
     const dados = await res.json();
     const dadosUsuario = dados.filter(d => d.usuario && d.usuario.id == usuarioId);
     
-    // Calcula o Total Geral
-    totalReceitasGeral = dadosUsuario.reduce((acc, r) => acc + r.valor, 0); 
+    const mesFiltro = document.getElementById('filtroMes').value;
     
-    // Filtra e Calcula o Total do Mês
-    const listaMes = dadosUsuario.filter(d => d.dataReceita.startsWith(document.getElementById('filtroMes').value));
+    // 1. Calcula todas as receitas ATÉ o mês selecionado (Cria o histórico)
+    const listaAteMes = dadosUsuario.filter(d => d.dataReceita.substring(0, 7) <= mesFiltro);
+    totalReceitasGeral = listaAteMes.reduce((acc, r) => acc + r.valor, 0); 
+    
+    // 2. Separa apenas as do mês atual (Para a tabela e balanço mensal)
+    const listaMes = dadosUsuario.filter(d => d.dataReceita.startsWith(mesFiltro));
     totalReceitasGlobal = listaMes.reduce((acc, r) => acc + r.valor, 0); 
     
     const tbody = document.getElementById('tabela-receitas');
@@ -80,11 +75,14 @@ async function carregarDespesas() {
     const dados = await res.json();
     const dadosUsuario = dados.filter(d => d.usuario && d.usuario.id == usuarioId);
     
-    // Calcula o Total Geral
-    totalDespesasGeral = dadosUsuario.reduce((acc, d) => acc + d.valor, 0); 
+    const mesFiltro = document.getElementById('filtroMes').value;
     
-    // Filtra e Calcula o Total do Mês
-    const listaMes = dadosUsuario.filter(d => d.dataDespesa.startsWith(document.getElementById('filtroMes').value));
+    // 1. Calcula todas as despesas ATÉ o mês selecionado (Cria o histórico)
+    const listaAteMes = dadosUsuario.filter(d => d.dataDespesa.substring(0, 7) <= mesFiltro);
+    totalDespesasGeral = listaAteMes.reduce((acc, d) => acc + d.valor, 0); 
+    
+    // 2. Separa apenas as do mês atual (Para a tabela e balanço mensal)
+    const listaMes = dadosUsuario.filter(d => d.dataDespesa.startsWith(mesFiltro));
     totalDespesasGlobal = listaMes.reduce((acc, d) => acc + d.valor, 0); 
     
     const tbody = document.getElementById('tabela-despesas');
@@ -104,25 +102,25 @@ async function carregarMetas() {
     });
 }
 
-// 8. FUNÇÃO MESTRE (Atualiza Tela e Gráfico)
+// 8. FUNÇÃO MESTRE (A Mágica Acontece Aqui)
 async function carregarPainel() {
     try {
         await carregarReceitas(); 
         await carregarDespesas(); 
         await carregarMetas();
         
-        // Aplica o Saldo do Mês Selecionado
-        const saldoMes = totalReceitasGlobal - totalDespesasGlobal;
-        const elMes = document.getElementById('valor-saldo');
-        elMes.innerText = formatarReais(saldoMes);
-        elMes.className = saldoMes < 0 ? "display-3 fw-bold text-danger text-center" : "display-3 fw-bold text-success text-center";
+        // SALDO EM CONTA (Acumulado de toda a vida até o mês da tela)
+        const saldoEmConta = totalReceitasGeral - totalDespesasGeral;
+        const elSaldo = document.getElementById('valor-saldo');
+        elSaldo.innerText = formatarReais(saldoEmConta);
+        elSaldo.className = saldoEmConta < 0 ? "display-3 fw-bold text-danger text-center" : "display-3 fw-bold text-success text-center";
         
-        // Aplica o Saldo Acumulado Total (Geral)
-        const saldoGeral = totalReceitasGeral - totalDespesasGeral;
-        const elGeral = document.getElementById('valor-saldo-geral');
-        if (elGeral) {
-            elGeral.innerText = formatarReais(saldoGeral);
-            elGeral.className = saldoGeral < 0 ? "fw-bold fs-4 text-danger" : "fw-bold fs-4 text-success";
+        // BALANÇO DO MÊS (Só as entradas e saídas deste mês isolado)
+        const balancoMes = totalReceitasGlobal - totalDespesasGlobal;
+        const elBalanco = document.getElementById('valor-saldo-geral');
+        if (elBalanco) {
+            elBalanco.innerText = formatarReais(balancoMes);
+            elBalanco.className = balancoMes < 0 ? "fw-bold fs-4 text-danger" : "fw-bold fs-4 text-success";
         }
         
         atualizarGrafico();
