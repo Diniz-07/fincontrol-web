@@ -1,20 +1,16 @@
-// --- script.js (VERSÃO FINAL COMPLETA - NGROK CLOUD) ---
+// --- script.js (VERSÃO FINAL COMPLETA - NGROK E SALDO GERAL) ---
 
 const URL_BACKEND = 'https://raye-bloomy-connectedly.ngrok-free.dev'; 
 const usuarioId = localStorage.getItem('usuarioId');
 const usuarioNome = localStorage.getItem('usuarioNome');
 
-// 1. PROTEÇÃO DE ROTA (Chuta quem tentar acessar sem login)
-if (!usuarioId) { 
-    window.location.href = 'login.html'; 
-}
+// 1. PROTEÇÃO DE ROTA
+if (!usuarioId) { window.location.href = 'login.html'; }
 
 // 2. CONFIGURAÇÃO DOS ALERTAS
-const Toast = Swal.mixin({ 
-    toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true, background: '#161b22', color: '#fff', iconColor: '#3b82f6' 
-});
+const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true, background: '#161b22', color: '#fff', iconColor: '#3b82f6' });
 
-// 3. CABEÇALHOS DO NGROK (Pula a tela de aviso de segurança)
+// 3. CABEÇALHOS DO NGROK
 const headersPadrao = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
 const headersGet = { 'ngrok-skip-browser-warning': 'true' };
 
@@ -40,13 +36,17 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarPainel();
 });
 
-let meuGrafico = null, totalReceitasGlobal = 0, totalDespesasGlobal = 0;
+// VARIÁVEIS GLOBAIS DE SALDO
+let meuGrafico = null;
+let totalReceitasGlobal = 0, totalDespesasGlobal = 0; // Para o mês
+let totalReceitasGeral = 0, totalDespesasGeral = 0;   // Para todo o período
+
 function formatarReais(valor) { return parseFloat(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function formatarData(dataString) { return dataString ? dataString.split('-').reverse().join('/') : '-'; }
 window.limparForm = function(formId, idInput) { document.getElementById(formId).reset(); document.getElementById(idInput).value = ''; };
 window.sairDoSistema = function() { localStorage.clear(); window.location.href = 'login.html'; }
 
-// 6. GRÁFICO RESUMO
+// 6. GRÁFICO RESUMO (Apenas do Mês)
 function atualizarGrafico() {
     const ctx = document.getElementById('graficoResumo').getContext('2d');
     if(meuGrafico) meuGrafico.destroy(); 
@@ -57,29 +57,39 @@ function atualizarGrafico() {
     meuGrafico = new Chart(ctx, { type: 'doughnut', data: { labels: ['Entradas', 'Saídas'], datasets: [{ data: [totalReceitasGlobal, totalDespesasGlobal], backgroundColor: ['#00ff88', '#ff4d4d'], hoverOffset: 4, borderWidth: 0 }] }, options: { cutout: '75%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
 }
 
-// 7. BUSCA DE DADOS (READ)
+// 7. BUSCA DE DADOS E CÁLCULOS
 async function carregarReceitas() {
     const res = await fetch(`${URL_BACKEND}/receitas`, { headers: headersGet });
     const dados = await res.json();
-    const lista = dados.filter(d => d.usuario && d.usuario.id == usuarioId && d.dataReceita.startsWith(document.getElementById('filtroMes').value));
-    totalReceitasGlobal = lista.reduce((acc, r) => acc + r.valor, 0); 
+    const dadosUsuario = dados.filter(d => d.usuario && d.usuario.id == usuarioId);
+    
+    // Calcula o Total Geral
+    totalReceitasGeral = dadosUsuario.reduce((acc, r) => acc + r.valor, 0); 
+    
+    // Filtra e Calcula o Total do Mês
+    const listaMes = dadosUsuario.filter(d => d.dataReceita.startsWith(document.getElementById('filtroMes').value));
+    totalReceitasGlobal = listaMes.reduce((acc, r) => acc + r.valor, 0); 
+    
     const tbody = document.getElementById('tabela-receitas');
-    tbody.innerHTML = lista.length === 0 ? '<tr><td class="text-white-50 text-center py-4">Nenhum lançamento</td></tr>' : '';
-    lista.forEach(d => { 
-        tbody.innerHTML += `<tr class="align-middle"><td><div class="text-white fw-bold d-flex align-items-center">${obterIcone(d.descricao)} ${d.descricao}</div><div class="text-white-50 small ps-4">${formatarData(d.dataReceita)}</div></td><td class="text-success fw-bold text-end">+ ${formatarReais(d.valor)}</td><td class="text-end"><button class="btn btn-sm btn-link text-primary p-1" onclick="editarReceita(${d.id}, '${d.descricao}', ${d.valor}, '${d.dataReceita}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-link text-danger p-1" onclick="apagarReceita(${d.id})"><i class="bi bi-trash3"></i></button></td></tr>`; 
-    });
+    tbody.innerHTML = listaMes.length === 0 ? '<tr><td class="text-white-50 text-center py-4">Nenhum lançamento</td></tr>' : '';
+    listaMes.forEach(d => { tbody.innerHTML += `<tr class="align-middle"><td><div class="text-white fw-bold d-flex align-items-center">${obterIcone(d.descricao)} ${d.descricao}</div><div class="text-white-50 small ps-4">${formatarData(d.dataReceita)}</div></td><td class="text-success fw-bold text-end">+ ${formatarReais(d.valor)}</td><td class="text-end"><button class="btn btn-sm btn-link text-primary p-1" onclick="editarReceita(${d.id}, '${d.descricao}', ${d.valor}, '${d.dataReceita}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-link text-danger p-1" onclick="apagarReceita(${d.id})"><i class="bi bi-trash3"></i></button></td></tr>`; });
 }
 
 async function carregarDespesas() {
     const res = await fetch(`${URL_BACKEND}/despesas`, { headers: headersGet });
     const dados = await res.json();
-    const lista = dados.filter(d => d.usuario && d.usuario.id == usuarioId && d.dataDespesa.startsWith(document.getElementById('filtroMes').value));
-    totalDespesasGlobal = lista.reduce((acc, d) => acc + d.valor, 0); 
+    const dadosUsuario = dados.filter(d => d.usuario && d.usuario.id == usuarioId);
+    
+    // Calcula o Total Geral
+    totalDespesasGeral = dadosUsuario.reduce((acc, d) => acc + d.valor, 0); 
+    
+    // Filtra e Calcula o Total do Mês
+    const listaMes = dadosUsuario.filter(d => d.dataDespesa.startsWith(document.getElementById('filtroMes').value));
+    totalDespesasGlobal = listaMes.reduce((acc, d) => acc + d.valor, 0); 
+    
     const tbody = document.getElementById('tabela-despesas');
-    tbody.innerHTML = lista.length === 0 ? '<tr><td class="text-white-50 text-center py-4">Nenhum lançamento</td></tr>' : '';
-    lista.forEach(d => { 
-        tbody.innerHTML += `<tr class="align-middle"><td><div class="text-white fw-bold d-flex align-items-center">${obterIcone(d.descricao)} ${d.descricao}</div><div class="text-white-50 small ps-4">${formatarData(d.dataDespesa)}</div></td><td class="text-danger fw-bold text-end">- ${formatarReais(d.valor)}</td><td class="text-end"><button class="btn btn-sm btn-link text-primary p-1" onclick="editarDespesa(${d.id}, '${d.descricao}', ${d.valor}, '${d.dataDespesa}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-link text-danger p-1" onclick="apagarDespesa(${d.id})"><i class="bi bi-trash3"></i></button></td></tr>`; 
-    });
+    tbody.innerHTML = listaMes.length === 0 ? '<tr><td class="text-white-50 text-center py-4">Nenhum lançamento</td></tr>' : '';
+    listaMes.forEach(d => { tbody.innerHTML += `<tr class="align-middle"><td><div class="text-white fw-bold d-flex align-items-center">${obterIcone(d.descricao)} ${d.descricao}</div><div class="text-white-50 small ps-4">${formatarData(d.dataDespesa)}</div></td><td class="text-danger fw-bold text-end">- ${formatarReais(d.valor)}</td><td class="text-end"><button class="btn btn-sm btn-link text-primary p-1" onclick="editarDespesa(${d.id}, '${d.descricao}', ${d.valor}, '${d.dataDespesa}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-link text-danger p-1" onclick="apagarDespesa(${d.id})"><i class="bi bi-trash3"></i></button></td></tr>`; });
 }
 
 async function carregarMetas() {
@@ -90,34 +100,31 @@ async function carregarMetas() {
     container.innerHTML = lista.length === 0 ? '<div class="col-12 text-center text-white-50 py-3">Crie seu primeiro objetivo!</div>' : '';
     lista.forEach(meta => {
         let porcentagem = Math.min((meta.valorAtual / meta.valorMeta) * 100, 100);
-        container.innerHTML += `
-            <div class="col-md-6 col-lg-4">
-                <div class="card bg-dark border-secondary h-100 p-3 shadow-sm">
-                    <div class="d-flex justify-content-between mb-2">
-                        <span class="text-white fw-bold"><i class="bi bi-trophy text-warning me-2"></i>${meta.nomeMeta}</span>
-                        <div class="text-nowrap">
-                            <button class="btn btn-sm btn-link text-primary p-0 me-2" onclick="editarMeta(${meta.id}, '${meta.nomeMeta}', ${meta.valorMeta}, ${meta.valorAtual}, '${meta.dataLimite}')"><i class="bi bi-pencil"></i></button>
-                            <button class="btn btn-sm btn-link text-danger p-0" onclick="apagarMeta(${meta.id})"><i class="bi bi-x-circle"></i></button>
-                        </div>
-                    </div>
-                    <div class="progress mb-2"><div class="progress-bar bg-primary shadow-sm" style="width: ${porcentagem}%"></div></div>
-                    <div class="d-flex justify-content-between small">
-                        <span class="text-white-50">${formatarReais(meta.valorAtual)} / ${formatarReais(meta.valorMeta)}</span>
-                        <span class="text-primary fw-bold">${porcentagem.toFixed(0)}%</span>
-                    </div>
-                </div>
-            </div>`;
+        container.innerHTML += `<div class="col-md-6 col-lg-4"><div class="card bg-dark border-secondary h-100 p-3 shadow-sm"><div class="d-flex justify-content-between mb-2"><span class="text-white fw-bold"><i class="bi bi-trophy text-warning me-2"></i>${meta.nomeMeta}</span><div class="text-nowrap"><button class="btn btn-sm btn-link text-primary p-0 me-2" onclick="editarMeta(${meta.id}, '${meta.nomeMeta}', ${meta.valorMeta}, ${meta.valorAtual}, '${meta.dataLimite}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-link text-danger p-0" onclick="apagarMeta(${meta.id})"><i class="bi bi-x-circle"></i></button></div></div><div class="progress mb-2"><div class="progress-bar bg-primary shadow-sm" style="width: ${porcentagem}%"></div></div><div class="d-flex justify-content-between small"><span class="text-white-50">${formatarReais(meta.valorAtual)} / ${formatarReais(meta.valorMeta)}</span><span class="text-primary fw-bold">${porcentagem.toFixed(0)}%</span></div></div></div>`;
     });
 }
 
-// 8. FUNÇÃO MESTRE
+// 8. FUNÇÃO MESTRE (Atualiza Tela e Gráfico)
 async function carregarPainel() {
     try {
-        await carregarReceitas(); await carregarDespesas(); await carregarMetas();
-        const saldoTotal = totalReceitasGlobal - totalDespesasGlobal;
-        const el = document.getElementById('valor-saldo');
-        el.innerText = formatarReais(saldoTotal);
-        el.className = saldoTotal < 0 ? "display-3 fw-bold text-danger text-center" : "display-3 fw-bold text-success text-center";
+        await carregarReceitas(); 
+        await carregarDespesas(); 
+        await carregarMetas();
+        
+        // Aplica o Saldo do Mês Selecionado
+        const saldoMes = totalReceitasGlobal - totalDespesasGlobal;
+        const elMes = document.getElementById('valor-saldo');
+        elMes.innerText = formatarReais(saldoMes);
+        elMes.className = saldoMes < 0 ? "display-3 fw-bold text-danger text-center" : "display-3 fw-bold text-success text-center";
+        
+        // Aplica o Saldo Acumulado Total (Geral)
+        const saldoGeral = totalReceitasGeral - totalDespesasGeral;
+        const elGeral = document.getElementById('valor-saldo-geral');
+        if (elGeral) {
+            elGeral.innerText = formatarReais(saldoGeral);
+            elGeral.className = saldoGeral < 0 ? "fw-bold fs-4 text-danger" : "fw-bold fs-4 text-success";
+        }
+        
         atualizarGrafico();
     } catch (e) { console.error("Erro na conexão:", e); }
 }
