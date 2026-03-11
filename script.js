@@ -1,4 +1,4 @@
-// --- script.js (VERSÃO FINAL COMPLETA - NGROK E SALDO ACUMULADO REAL) ---
+// --- script.js (VERSÃO CORRIGIDA - PROTEÇÃO DE DADOS NUMÉRICOS) ---
 
 const URL_BACKEND = 'https://raye-bloomy-connectedly.ngrok-free.dev'; 
 const usuarioId = localStorage.getItem('usuarioId');
@@ -32,8 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 let meuGrafico = null;
-let totalReceitasGlobal = 0, totalDespesasGlobal = 0; // Somente do mês
-let totalReceitasGeral = 0, totalDespesasGeral = 0;   // Acumulado de todos os meses até o selecionado
+let totalReceitasGlobal = 0, totalDespesasGlobal = 0;
+let totalReceitasGeral = 0, totalDespesasGeral = 0;   
 
 function formatarReais(valor) { return parseFloat(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 function formatarData(dataString) { return dataString ? dataString.split('-').reverse().join('/') : '-'; }
@@ -57,11 +57,9 @@ async function carregarReceitas() {
     
     const mesFiltro = document.getElementById('filtroMes').value;
     
-    // 1. Calcula todas as receitas ATÉ o mês selecionado (Cria o histórico)
     const listaAteMes = dadosUsuario.filter(d => d.dataReceita.substring(0, 7) <= mesFiltro);
     totalReceitasGeral = listaAteMes.reduce((acc, r) => acc + r.valor, 0); 
     
-    // 2. Separa apenas as do mês atual (Para a tabela e balanço mensal)
     const listaMes = dadosUsuario.filter(d => d.dataReceita.startsWith(mesFiltro));
     totalReceitasGlobal = listaMes.reduce((acc, r) => acc + r.valor, 0); 
     
@@ -77,11 +75,9 @@ async function carregarDespesas() {
     
     const mesFiltro = document.getElementById('filtroMes').value;
     
-    // 1. Calcula todas as despesas ATÉ o mês selecionado (Cria o histórico)
     const listaAteMes = dadosUsuario.filter(d => d.dataDespesa.substring(0, 7) <= mesFiltro);
     totalDespesasGeral = listaAteMes.reduce((acc, d) => acc + d.valor, 0); 
     
-    // 2. Separa apenas as do mês atual (Para a tabela e balanço mensal)
     const listaMes = dadosUsuario.filter(d => d.dataDespesa.startsWith(mesFiltro));
     totalDespesasGlobal = listaMes.reduce((acc, d) => acc + d.valor, 0); 
     
@@ -102,20 +98,17 @@ async function carregarMetas() {
     });
 }
 
-// 8. FUNÇÃO MESTRE (A Mágica Acontece Aqui)
 async function carregarPainel() {
     try {
         await carregarReceitas(); 
         await carregarDespesas(); 
         await carregarMetas();
         
-        // SALDO EM CONTA (Acumulado de toda a vida até o mês da tela)
         const saldoEmConta = totalReceitasGeral - totalDespesasGeral;
         const elSaldo = document.getElementById('valor-saldo');
         elSaldo.innerText = formatarReais(saldoEmConta);
         elSaldo.className = saldoEmConta < 0 ? "display-3 fw-bold text-danger text-center" : "display-3 fw-bold text-success text-center";
         
-        // BALANÇO DO MÊS (Só as entradas e saídas deste mês isolado)
         const balancoMes = totalReceitasGlobal - totalDespesasGlobal;
         const elBalanco = document.getElementById('valor-saldo-geral');
         if (elBalanco) {
@@ -127,17 +120,80 @@ async function carregarPainel() {
     } catch (e) { console.error("Erro na conexão:", e); }
 }
 
-// 9. EXCLUSÃO (DELETE)
 async function apagarReceita(id) { const res = await Swal.fire({ title: 'Excluir?', text: 'Essa ação não pode ser desfeita.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#10b981', cancelButtonColor: '#ef4444', confirmButtonText: 'Sim', background: '#161b22', color: '#fff' }); if (res.isConfirmed) { await fetch(`${URL_BACKEND}/receitas/${id}`, { method: 'DELETE', headers: headersGet }); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Excluído!' }); } }
 async function apagarDespesa(id) { const res = await Swal.fire({ title: 'Excluir?', text: 'Essa ação não pode ser desfeita.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#10b981', cancelButtonColor: '#ef4444', confirmButtonText: 'Sim', background: '#161b22', color: '#fff' }); if (res.isConfirmed) { await fetch(`${URL_BACKEND}/despesas/${id}`, { method: 'DELETE', headers: headersGet }); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Excluído!' }); } }
 async function apagarMeta(id) { const res = await Swal.fire({ title: 'Remover Meta?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#3b82f6', cancelButtonColor: '#ef4444', background: '#161b22', color: '#fff' }); if (res.isConfirmed) { await fetch(`${URL_BACKEND}/metas/${id}`, { method: 'DELETE', headers: headersGet }); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Removida!' }); } }
 
-// 10. INSERÇÃO E ATUALIZAÇÃO (POST / PUT)
-document.getElementById('formReceita').addEventListener('submit', async e => { e.preventDefault(); const id = document.getElementById('idReceita').value; await fetch(id ? `${URL_BACKEND}/receitas/${id}` : `${URL_BACKEND}/receitas`, { method: id ? 'PUT' : 'POST', headers: headersPadrao, body: JSON.stringify({ descricao: document.getElementById('descReceita').value, valor: document.getElementById('valorReceita').value, dataReceita: document.getElementById('dataReceita').value, usuario: {id: usuarioId}, categoria: {id: 1} }) }); bootstrap.Modal.getInstance('#modalReceita').hide(); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Salvo!' }); });
-document.getElementById('formDespesa').addEventListener('submit', async e => { e.preventDefault(); const id = document.getElementById('idDespesa').value; await fetch(id ? `${URL_BACKEND}/despesas/${id}` : `${URL_BACKEND}/despesas`, { method: id ? 'PUT' : 'POST', headers: headersPadrao, body: JSON.stringify({ descricao: document.getElementById('descDespesa').value, valor: document.getElementById('valorDespesa').value, dataDespesa: document.getElementById('dataDespesa').value, usuario: {id: usuarioId}, categoria: {id: 2} }) }); bootstrap.Modal.getInstance('#modalDespesa').hide(); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Salvo!' }); });
-document.getElementById('formMeta').addEventListener('submit', async e => { e.preventDefault(); const id = document.getElementById('idMeta').value; await fetch(id ? `${URL_BACKEND}/metas/${id}` : `${URL_BACKEND}/metas`, { method: id ? 'PUT' : 'POST', headers: headersPadrao, body: JSON.stringify({ nomeMeta: document.getElementById('nomeMeta').value, valorMeta: parseFloat(document.getElementById('valorMeta').value), valorAtual: parseFloat(document.getElementById('valorAtual').value), dataLimite: document.getElementById('dataLimite').value, usuario: {id: usuarioId} }) }); bootstrap.Modal.getInstance('#modalMeta').hide(); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Meta salva!' }); });
+// CORREÇÃO APLICADA AQUI: parseFloat() e validação de resposta do servidor
+document.getElementById('formReceita').addEventListener('submit', async e => { 
+    e.preventDefault(); 
+    const id = document.getElementById('idReceita').value; 
+    const resposta = await fetch(id ? `${URL_BACKEND}/receitas/${id}` : `${URL_BACKEND}/receitas`, { 
+        method: id ? 'PUT' : 'POST', 
+        headers: headersPadrao, 
+        body: JSON.stringify({ 
+            descricao: document.getElementById('descReceita').value, 
+            valor: parseFloat(document.getElementById('valorReceita').value), 
+            dataReceita: document.getElementById('dataReceita').value, 
+            usuario: {id: usuarioId}, 
+            categoria: {id: 1} 
+        }) 
+    }); 
+    if(resposta.ok) {
+        bootstrap.Modal.getInstance('#modalReceita').hide(); 
+        await carregarPainel(); 
+        Toast.fire({ icon: 'success', title: 'Salvo!' }); 
+    } else {
+        Toast.fire({ icon: 'error', title: 'Erro ao salvar!', color: '#ff4d4d' });
+    }
+});
 
-// 11. PREENCHIMENTO DOS MODAIS PARA EDIÇÃO
+document.getElementById('formDespesa').addEventListener('submit', async e => { 
+    e.preventDefault(); 
+    const id = document.getElementById('idDespesa').value; 
+    const resposta = await fetch(id ? `${URL_BACKEND}/despesas/${id}` : `${URL_BACKEND}/despesas`, { 
+        method: id ? 'PUT' : 'POST', 
+        headers: headersPadrao, 
+        body: JSON.stringify({ 
+            descricao: document.getElementById('descDespesa').value, 
+            valor: parseFloat(document.getElementById('valorDespesa').value), 
+            dataDespesa: document.getElementById('dataDespesa').value, 
+            usuario: {id: usuarioId}, 
+            categoria: {id: 2} 
+        }) 
+    }); 
+    if(resposta.ok) {
+        bootstrap.Modal.getInstance('#modalDespesa').hide(); 
+        await carregarPainel(); 
+        Toast.fire({ icon: 'success', title: 'Salvo!' }); 
+    } else {
+        Toast.fire({ icon: 'error', title: 'Erro ao salvar!', color: '#ff4d4d' });
+    }
+});
+
+document.getElementById('formMeta').addEventListener('submit', async e => { 
+    e.preventDefault(); 
+    const id = document.getElementById('idMeta').value; 
+    const resposta = await fetch(id ? `${URL_BACKEND}/metas/${id}` : `${URL_BACKEND}/metas`, { 
+        method: id ? 'PUT' : 'POST', 
+        headers: headersPadrao, 
+        body: JSON.stringify({ 
+            nomeMeta: document.getElementById('nomeMeta').value, 
+            valorMeta: parseFloat(document.getElementById('valorMeta').value), 
+            valorAtual: parseFloat(document.getElementById('valorAtual').value), 
+            dataLimite: document.getElementById('dataLimite').value, 
+            usuario: {id: usuarioId} 
+        }) 
+    });
+    if(resposta.ok) {
+        bootstrap.Modal.getInstance('#modalMeta').hide(); 
+        await carregarPainel(); 
+        Toast.fire({ icon: 'success', title: 'Meta salva!' }); 
+    } else {
+        Toast.fire({ icon: 'error', title: 'Erro ao salvar!', color: '#ff4d4d' });
+    }
+});
+
 window.editarReceita = function(id, desc, valor, data) { document.getElementById('idReceita').value = id; document.getElementById('descReceita').value = desc; document.getElementById('valorReceita').value = valor; document.getElementById('dataReceita').value = data; new bootstrap.Modal('#modalReceita').show(); };
 window.editarDespesa = function(id, desc, valor, data) { document.getElementById('idDespesa').value = id; document.getElementById('descDespesa').value = desc; document.getElementById('valorDespesa').value = valor; document.getElementById('dataDespesa').value = data; new bootstrap.Modal('#modalDespesa').show(); };
 window.editarMeta = function(id, nome, valorM, valorA, data) { document.getElementById('idMeta').value = id; document.getElementById('nomeMeta').value = nome; document.getElementById('valorMeta').value = valorM; document.getElementById('valorAtual').value = valorA; document.getElementById('dataLimite').value = data; new bootstrap.Modal('#modalMeta').show(); };
