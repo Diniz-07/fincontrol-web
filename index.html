@@ -1,145 +1,102 @@
-// --- script.js (VERSÃO FINAL COMPLETA - NGROK E SALDO GERAL) ---
-
-const URL_BACKEND = 'https://raye-bloomy-connectedly.ngrok-free.dev'; 
-const usuarioId = localStorage.getItem('usuarioId');
-const usuarioNome = localStorage.getItem('usuarioNome');
-
-// 1. PROTEÇÃO DE ROTA
-if (!usuarioId) { window.location.href = 'login.html'; }
-
-// 2. CONFIGURAÇÃO DOS ALERTAS
-const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 2500, timerProgressBar: true, background: '#161b22', color: '#fff', iconColor: '#3b82f6' });
-
-// 3. CABEÇALHOS DO NGROK
-const headersPadrao = { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' };
-const headersGet = { 'ngrok-skip-browser-warning': 'true' };
-
-// 4. MOTOR DE ÍCONES
-function obterIcone(descricao) {
-    const desc = descricao.toLowerCase();
-    if (desc.includes('salario') || desc.includes('pix')) return '<i class="bi bi-cash-stack text-success me-2"></i>';
-    if (desc.includes('ifood') || desc.includes('lanche') || desc.includes('comida')) return '<i class="bi bi-egg-fried text-warning me-2"></i>';
-    if (desc.includes('gasolina') || desc.includes('moto') || desc.includes('adv')) return '<i class="bi bi-fuel-pump text-info me-2"></i>';
-    if (desc.includes('internet') || desc.includes('net') || desc.includes('vivo')) return '<i class="bi bi-wifi text-primary me-2"></i>';
-    if (desc.includes('luz') || desc.includes('energia')) return '<i class="bi bi-lightning-charge text-warning me-2"></i>';
-    if (desc.includes('aluguel') || desc.includes('casa')) return '<i class="bi bi-house-door text-danger me-2"></i>';
-    if (desc.includes('mercado') || desc.includes('compra')) return '<i class="bi bi-cart3 text-success me-2"></i>';
-    return '<i class="bi bi-dot text-muted me-2"></i>';
-}
-
-// 5. INICIALIZAÇÃO DA TELA
-document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('nome-usuario-logado').innerText = usuarioNome;
-    const inputMes = document.getElementById('filtroMes');
-    inputMes.value = new Date().toISOString().slice(0, 7); 
-    inputMes.addEventListener('change', carregarPainel);
-    carregarPainel();
-});
-
-// VARIÁVEIS GLOBAIS DE SALDO
-let meuGrafico = null;
-let totalReceitasGlobal = 0, totalDespesasGlobal = 0; // Para o mês
-let totalReceitasGeral = 0, totalDespesasGeral = 0;   // Para todo o período
-
-function formatarReais(valor) { return parseFloat(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
-function formatarData(dataString) { return dataString ? dataString.split('-').reverse().join('/') : '-'; }
-window.limparForm = function(formId, idInput) { document.getElementById(formId).reset(); document.getElementById(idInput).value = ''; };
-window.sairDoSistema = function() { localStorage.clear(); window.location.href = 'login.html'; }
-
-// 6. GRÁFICO RESUMO (Apenas do Mês)
-function atualizarGrafico() {
-    const ctx = document.getElementById('graficoResumo').getContext('2d');
-    if(meuGrafico) meuGrafico.destroy(); 
-    if(totalReceitasGlobal === 0 && totalDespesasGlobal === 0) { 
-        meuGrafico = new Chart(ctx, { type: 'doughnut', data: { datasets: [{ data: [1], backgroundColor: ['#30363d'] }] }, options: { cutout: '80%', plugins: { tooltip: { enabled: false } } } }); 
-        return; 
-    }
-    meuGrafico = new Chart(ctx, { type: 'doughnut', data: { labels: ['Entradas', 'Saídas'], datasets: [{ data: [totalReceitasGlobal, totalDespesasGlobal], backgroundColor: ['#00ff88', '#ff4d4d'], hoverOffset: 4, borderWidth: 0 }] }, options: { cutout: '75%', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } });
-}
-
-// 7. BUSCA DE DADOS E CÁLCULOS
-async function carregarReceitas() {
-    const res = await fetch(`${URL_BACKEND}/receitas`, { headers: headersGet });
-    const dados = await res.json();
-    const dadosUsuario = dados.filter(d => d.usuario && d.usuario.id == usuarioId);
-    
-    // Calcula o Total Geral
-    totalReceitasGeral = dadosUsuario.reduce((acc, r) => acc + r.valor, 0); 
-    
-    // Filtra e Calcula o Total do Mês
-    const listaMes = dadosUsuario.filter(d => d.dataReceita.startsWith(document.getElementById('filtroMes').value));
-    totalReceitasGlobal = listaMes.reduce((acc, r) => acc + r.valor, 0); 
-    
-    const tbody = document.getElementById('tabela-receitas');
-    tbody.innerHTML = listaMes.length === 0 ? '<tr><td class="text-white-50 text-center py-4">Nenhum lançamento</td></tr>' : '';
-    listaMes.forEach(d => { tbody.innerHTML += `<tr class="align-middle"><td><div class="text-white fw-bold d-flex align-items-center">${obterIcone(d.descricao)} ${d.descricao}</div><div class="text-white-50 small ps-4">${formatarData(d.dataReceita)}</div></td><td class="text-success fw-bold text-end">+ ${formatarReais(d.valor)}</td><td class="text-end"><button class="btn btn-sm btn-link text-primary p-1" onclick="editarReceita(${d.id}, '${d.descricao}', ${d.valor}, '${d.dataReceita}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-link text-danger p-1" onclick="apagarReceita(${d.id})"><i class="bi bi-trash3"></i></button></td></tr>`; });
-}
-
-async function carregarDespesas() {
-    const res = await fetch(`${URL_BACKEND}/despesas`, { headers: headersGet });
-    const dados = await res.json();
-    const dadosUsuario = dados.filter(d => d.usuario && d.usuario.id == usuarioId);
-    
-    // Calcula o Total Geral
-    totalDespesasGeral = dadosUsuario.reduce((acc, d) => acc + d.valor, 0); 
-    
-    // Filtra e Calcula o Total do Mês
-    const listaMes = dadosUsuario.filter(d => d.dataDespesa.startsWith(document.getElementById('filtroMes').value));
-    totalDespesasGlobal = listaMes.reduce((acc, d) => acc + d.valor, 0); 
-    
-    const tbody = document.getElementById('tabela-despesas');
-    tbody.innerHTML = listaMes.length === 0 ? '<tr><td class="text-white-50 text-center py-4">Nenhum lançamento</td></tr>' : '';
-    listaMes.forEach(d => { tbody.innerHTML += `<tr class="align-middle"><td><div class="text-white fw-bold d-flex align-items-center">${obterIcone(d.descricao)} ${d.descricao}</div><div class="text-white-50 small ps-4">${formatarData(d.dataDespesa)}</div></td><td class="text-danger fw-bold text-end">- ${formatarReais(d.valor)}</td><td class="text-end"><button class="btn btn-sm btn-link text-primary p-1" onclick="editarDespesa(${d.id}, '${d.descricao}', ${d.valor}, '${d.dataDespesa}')"><i class="bi bi-pencil-square"></i></button><button class="btn btn-sm btn-link text-danger p-1" onclick="apagarDespesa(${d.id})"><i class="bi bi-trash3"></i></button></td></tr>`; });
-}
-
-async function carregarMetas() {
-    const res = await fetch(`${URL_BACKEND}/metas`, { headers: headersGet });
-    const dados = await res.json();
-    const lista = dados.filter(m => m.usuario && m.usuario.id == usuarioId);
-    const container = document.getElementById('lista-metas');
-    container.innerHTML = lista.length === 0 ? '<div class="col-12 text-center text-white-50 py-3">Crie seu primeiro objetivo!</div>' : '';
-    lista.forEach(meta => {
-        let porcentagem = Math.min((meta.valorAtual / meta.valorMeta) * 100, 100);
-        container.innerHTML += `<div class="col-md-6 col-lg-4"><div class="card bg-dark border-secondary h-100 p-3 shadow-sm"><div class="d-flex justify-content-between mb-2"><span class="text-white fw-bold"><i class="bi bi-trophy text-warning me-2"></i>${meta.nomeMeta}</span><div class="text-nowrap"><button class="btn btn-sm btn-link text-primary p-0 me-2" onclick="editarMeta(${meta.id}, '${meta.nomeMeta}', ${meta.valorMeta}, ${meta.valorAtual}, '${meta.dataLimite}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-link text-danger p-0" onclick="apagarMeta(${meta.id})"><i class="bi bi-x-circle"></i></button></div></div><div class="progress mb-2"><div class="progress-bar bg-primary shadow-sm" style="width: ${porcentagem}%"></div></div><div class="d-flex justify-content-between small"><span class="text-white-50">${formatarReais(meta.valorAtual)} / ${formatarReais(meta.valorMeta)}</span><span class="text-primary fw-bold">${porcentagem.toFixed(0)}%</span></div></div></div>`;
-    });
-}
-
-// 8. FUNÇÃO MESTRE (Atualiza Tela e Gráfico)
-async function carregarPainel() {
-    try {
-        await carregarReceitas(); 
-        await carregarDespesas(); 
-        await carregarMetas();
-        
-        // Aplica o Saldo do Mês Selecionado
-        const saldoMes = totalReceitasGlobal - totalDespesasGlobal;
-        const elMes = document.getElementById('valor-saldo');
-        elMes.innerText = formatarReais(saldoMes);
-        elMes.className = saldoMes < 0 ? "display-3 fw-bold text-danger text-center" : "display-3 fw-bold text-success text-center";
-        
-        // Aplica o Saldo Acumulado Total (Geral)
-        const saldoGeral = totalReceitasGeral - totalDespesasGeral;
-        const elGeral = document.getElementById('valor-saldo-geral');
-        if (elGeral) {
-            elGeral.innerText = formatarReais(saldoGeral);
-            elGeral.className = saldoGeral < 0 ? "fw-bold fs-4 text-danger" : "fw-bold fs-4 text-success";
-        }
-        
-        atualizarGrafico();
-    } catch (e) { console.error("Erro na conexão:", e); }
-}
-
-// 9. EXCLUSÃO (DELETE)
-async function apagarReceita(id) { const res = await Swal.fire({ title: 'Excluir?', text: 'Essa ação não pode ser desfeita.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#10b981', cancelButtonColor: '#ef4444', confirmButtonText: 'Sim', background: '#161b22', color: '#fff' }); if (res.isConfirmed) { await fetch(`${URL_BACKEND}/receitas/${id}`, { method: 'DELETE', headers: headersGet }); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Excluído!' }); } }
-async function apagarDespesa(id) { const res = await Swal.fire({ title: 'Excluir?', text: 'Essa ação não pode ser desfeita.', icon: 'warning', showCancelButton: true, confirmButtonColor: '#10b981', cancelButtonColor: '#ef4444', confirmButtonText: 'Sim', background: '#161b22', color: '#fff' }); if (res.isConfirmed) { await fetch(`${URL_BACKEND}/despesas/${id}`, { method: 'DELETE', headers: headersGet }); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Excluído!' }); } }
-async function apagarMeta(id) { const res = await Swal.fire({ title: 'Remover Meta?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#3b82f6', cancelButtonColor: '#ef4444', background: '#161b22', color: '#fff' }); if (res.isConfirmed) { await fetch(`${URL_BACKEND}/metas/${id}`, { method: 'DELETE', headers: headersGet }); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Removida!' }); } }
-
-// 10. INSERÇÃO E ATUALIZAÇÃO (POST / PUT)
-document.getElementById('formReceita').addEventListener('submit', async e => { e.preventDefault(); const id = document.getElementById('idReceita').value; await fetch(id ? `${URL_BACKEND}/receitas/${id}` : `${URL_BACKEND}/receitas`, { method: id ? 'PUT' : 'POST', headers: headersPadrao, body: JSON.stringify({ descricao: document.getElementById('descReceita').value, valor: document.getElementById('valorReceita').value, dataReceita: document.getElementById('dataReceita').value, usuario: {id: usuarioId}, categoria: {id: 1} }) }); bootstrap.Modal.getInstance('#modalReceita').hide(); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Salvo!' }); });
-document.getElementById('formDespesa').addEventListener('submit', async e => { e.preventDefault(); const id = document.getElementById('idDespesa').value; await fetch(id ? `${URL_BACKEND}/despesas/${id}` : `${URL_BACKEND}/despesas`, { method: id ? 'PUT' : 'POST', headers: headersPadrao, body: JSON.stringify({ descricao: document.getElementById('descDespesa').value, valor: document.getElementById('valorDespesa').value, dataDespesa: document.getElementById('dataDespesa').value, usuario: {id: usuarioId}, categoria: {id: 2} }) }); bootstrap.Modal.getInstance('#modalDespesa').hide(); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Salvo!' }); });
-document.getElementById('formMeta').addEventListener('submit', async e => { e.preventDefault(); const id = document.getElementById('idMeta').value; await fetch(id ? `${URL_BACKEND}/metas/${id}` : `${URL_BACKEND}/metas`, { method: id ? 'PUT' : 'POST', headers: headersPadrao, body: JSON.stringify({ nomeMeta: document.getElementById('nomeMeta').value, valorMeta: parseFloat(document.getElementById('valorMeta').value), valorAtual: parseFloat(document.getElementById('valorAtual').value), dataLimite: document.getElementById('dataLimite').value, usuario: {id: usuarioId} }) }); bootstrap.Modal.getInstance('#modalMeta').hide(); await carregarPainel(); Toast.fire({ icon: 'success', title: 'Meta salva!' }); });
-
-// 11. PREENCHIMENTO DOS MODAIS PARA EDIÇÃO
-window.editarReceita = function(id, desc, valor, data) { document.getElementById('idReceita').value = id; document.getElementById('descReceita').value = desc; document.getElementById('valorReceita').value = valor; document.getElementById('dataReceita').value = data; new bootstrap.Modal('#modalReceita').show(); };
-window.editarDespesa = function(id, desc, valor, data) { document.getElementById('idDespesa').value = id; document.getElementById('descDespesa').value = desc; document.getElementById('valorDespesa').value = valor; document.getElementById('dataDespesa').value = data; new bootstrap.Modal('#modalDespesa').show(); };
-window.editarMeta = function(id, nome, valorM, valorA, data) { document.getElementById('idMeta').value = id; document.getElementById('nomeMeta').value = nome; document.getElementById('valorMeta').value = valorM; document.getElementById('valorAtual').value = valorA; document.getElementById('dataLimite').value = data; new bootstrap.Modal('#modalMeta').show(); };
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinControl | Seu Banco Pessoal</title>
+    <link rel="icon" type="image/png" href="logo-fincontrol.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        :root { --bg-dark: #0b0e14; --card-bg: #161b22; --primary-color: #3b82f6; --text-main: #ffffff; --text-muted: #abb2bf; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-main); letter-spacing: -0.01em; }
+        .navbar { background-color: rgba(22, 27, 34, 0.95) !important; backdrop-filter: blur(10px); border-bottom: 1px solid #30363d; padding: 0.8rem 0; }
+        .card { background-color: var(--card-bg); border: 1px solid #30363d; border-radius: 20px; }
+        .card-saldo { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border: 1px solid #38444d; }
+        .btn { border-radius: 12px; font-weight: 600; transition: 0.2s; }
+        .table { color: var(--text-main); }
+        .table-hover tbody tr:hover { background-color: #21262d !important; }
+        .modal-content { background-color: var(--card-bg); border: 1px solid #444c56; border-radius: 24px; }
+        .form-control { background-color: #0d1117; border: 1px solid #30363d; color: white; border-radius: 12px; padding: 0.7rem; }
+        .form-control:focus { border-color: var(--primary-color); box-shadow: none; background-color: #0d1117; color: white; }
+        .progress { background-color: #30363d; border-radius: 20px; height: 10px !important; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-dark sticky-top">
+        <div class="container d-flex justify-content-between align-items-center">
+            <a class="navbar-brand" href="#"><img src="logo-fincontrol.png" alt="FinControl" style="height: 55px; filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.3));"></a>
+            <div class="d-flex align-items-center">
+                <input type="month" id="filtroMes" class="form-control form-control-sm me-4 bg-dark border-secondary text-white" style="width: auto;">
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle border-0" data-bs-toggle="dropdown">
+                        <i class="bi bi-person-circle me-1 text-primary"></i> <span id="nome-usuario-logado">Usuário</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow">
+                        <li><a class="dropdown-item py-2" href="#" onclick="sairDoSistema()"><i class="bi bi-box-arrow-right me-2 text-danger"></i>Sair</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-4 pb-5">
+        <div class="row g-4 mb-4">
+            <div class="col-lg-7">
+                <div class="card card-saldo shadow-sm h-100 p-4 d-flex flex-column align-items-center justify-content-center">
+                    <p class="text-white-50 text-uppercase small fw-bold mb-1">Resultado do Mês</p>
+                    <h1 id="valor-saldo" class="display-3 fw-bold mb-0 text-center">R$ 0,00</h1>
+                    <div class="mt-4 pt-3 border-top border-secondary w-100 text-center">
+                        <span class="text-white-50 small text-uppercase fw-bold me-2">Saldo Total Acumulado:</span>
+                        <span id="valor-saldo-geral" class="fw-bold fs-4 text-white">R$ 0,00</span>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card shadow-sm h-100 p-3 d-flex align-items-center justify-content-center">
+                    <p class="text-white small fw-bold mb-3">RESUMO FINANCEIRO</p>
+                    <div style="height: 180px; width: 180px;"><canvas id="graficoResumo"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100 p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold mb-0 text-white"><i class="bi bi-arrow-up-circle-fill text-success me-2"></i>Entradas</h5>
+                        <button class="btn btn-sm btn-success px-3" data-bs-toggle="modal" data-bs-target="#modalReceita" onclick="limparForm('formReceita', 'idReceita')">+ Novo</button>
+                    </div>
+                    <div class="table-responsive"><table class="table table-dark table-borderless table-hover"><tbody id="tabela-receitas"></tbody></table></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm h-100 p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold mb-0 text-white"><i class="bi bi-arrow-down-circle-fill text-danger me-2"></i>Saídas</h5>
+                        <button class="btn btn-sm btn-danger px-3" data-bs-toggle="modal" data-bs-target="#modalDespesa" onclick="limparForm('formDespesa', 'idDespesa')">+ Novo</button>
+                    </div>
+                    <div class="table-responsive"><table class="table table-dark table-borderless table-hover"><tbody id="tabela-despesas"></tbody></table></div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card shadow-sm p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="fw-bold mb-0 text-white"><i class="bi bi-bullseye text-primary me-2"></i>Objetivos e Metas</h5>
+                        <button class="btn btn-sm btn-primary px-3" data-bs-toggle="modal" data-bs-target="#modalMeta" onclick="limparForm('formMeta', 'idMeta')">Nova Meta</button>
+                    </div>
+                    <div id="lista-metas" class="row g-4"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal fade" id="modalReceita" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-white"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-success">Entrada</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><form id="formReceita"><input type="hidden" id="idReceita"><div class="mb-3"><label>Descrição</label><input type="text" class="form-control" id="descReceita" required></div><div class="row"><div class="col-6 mb-3"><label>Valor</label><input type="number" step="0.01" class="form-control" id="valorReceita" required></div><div class="col-6 mb-3"><label>Data</label><input type="date" class="form-control" id="dataReceita" required></div></div><button type="submit" class="btn btn-success w-100 fw-bold">Salvar</button></form></div></div></div></div>
+    <div class="modal fade" id="modalDespesa" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-white"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-danger">Saída</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><form id="formDespesa"><input type="hidden" id="idDespesa"><div class="mb-3"><label>Descrição</label><input type="text" class="form-control" id="descDespesa" required></div><div class="row"><div class="col-6 mb-3"><label>Valor</label><input type="number" step="0.01" class="form-control" id="valorDespesa" required></div><div class="col-6 mb-3"><label>Data</label><input type="date" class="form-control" id="dataDespesa" required></div></div><button type="submit" class="btn btn-danger w-100 fw-bold">Salvar</button></form></div></div></div></div>
+    <div class="modal fade" id="modalMeta" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-white"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-primary">Novo Objetivo</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><form id="formMeta"><input type="hidden" id="idMeta"><div class="mb-3"><label>Nome da Meta</label><input type="text" class="form-control" id="nomeMeta" placeholder="Ex: Viagem" required></div><div class="row"><div class="col-6 mb-3"><label>Valor Meta</label><input type="number" step="0.01" class="form-control" id="valorMeta" required></div><div class="col-6 mb-3"><label>Já guardado</label><input type="number" step="0.01" class="form-control" id="valorAtual" value="0" required></div></div><div class="mb-3"><label>Data Limite</label><input type="date" class="form-control" id="dataLimite" required></div><button type="submit" class="btn btn-primary w-100 fw-bold">Salvar Meta</button></form></div></div></div></div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
