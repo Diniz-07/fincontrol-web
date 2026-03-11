@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FinControl | Seu Banco Pessoal</title>
+    
     <link rel="icon" type="image/png" href="logo-fincontrol.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
     <style>
         :root { --bg-dark: #0b0e14; --card-bg: #161b22; --primary-color: #3b82f6; --text-main: #ffffff; --text-muted: #abb2bf; }
         body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-main); letter-spacing: -0.01em; }
@@ -25,6 +27,7 @@
     </style>
 </head>
 <body>
+
     <nav class="navbar navbar-dark sticky-top">
         <div class="container d-flex justify-content-between align-items-center">
             <a class="navbar-brand" href="#"><img src="logo-fincontrol.png" alt="FinControl" style="height: 55px; filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.3));"></a>
@@ -41,25 +44,28 @@
             </div>
         </div>
     </nav>
+
     <div class="container mt-4 pb-5">
         <div class="row g-4 mb-4">
             <div class="col-lg-7">
                 <div class="card card-saldo shadow-sm h-100 p-4 d-flex flex-column align-items-center justify-content-center">
-                    <p class="text-white-50 text-uppercase small fw-bold mb-1">Resultado do Mês</p>
+                    <p class="text-white-50 text-uppercase small fw-bold mb-1">Saldo em Conta</p>
                     <h1 id="valor-saldo" class="display-3 fw-bold mb-0 text-center">R$ 0,00</h1>
+                    
                     <div class="mt-4 pt-3 border-top border-secondary w-100 text-center">
-                        <span class="text-white-50 small text-uppercase fw-bold me-2">Saldo Total Acumulado:</span>
+                        <span class="text-white-50 small text-uppercase fw-bold me-2">Balanço do Mês (Entradas - Saídas):</span>
                         <span id="valor-saldo-geral" class="fw-bold fs-4 text-white">R$ 0,00</span>
                     </div>
                 </div>
             </div>
             <div class="col-lg-5">
                 <div class="card shadow-sm h-100 p-3 d-flex align-items-center justify-content-center">
-                    <p class="text-white small fw-bold mb-3">RESUMO FINANCEIRO</p>
+                    <p class="text-white small fw-bold mb-3">RESUMO DO MÊS</p>
                     <div style="height: 180px; width: 180px;"><canvas id="graficoResumo"></canvas></div>
                 </div>
             </div>
         </div>
+
         <div class="row g-4">
             <div class="col-md-6">
                 <div class="card shadow-sm h-100 p-4">
@@ -80,6 +86,7 @@
                 </div>
             </div>
         </div>
+
         <div class="row mt-4">
             <div class="col-12">
                 <div class="card shadow-sm p-4">
@@ -92,9 +99,13 @@
             </div>
         </div>
     </div>
+
     <div class="modal fade" id="modalReceita" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-white"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-success">Entrada</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><form id="formReceita"><input type="hidden" id="idReceita"><div class="mb-3"><label>Descrição</label><input type="text" class="form-control" id="descReceita" required></div><div class="row"><div class="col-6 mb-3"><label>Valor</label><input type="number" step="0.01" class="form-control" id="valorReceita" required></div><div class="col-6 mb-3"><label>Data</label><input type="date" class="form-control" id="dataReceita" required></div></div><button type="submit" class="btn btn-success w-100 fw-bold">Salvar</button></form></div></div></div></div>
+
     <div class="modal fade" id="modalDespesa" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-white"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-danger">Saída</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><form id="formDespesa"><input type="hidden" id="idDespesa"><div class="mb-3"><label>Descrição</label><input type="text" class="form-control" id="descDespesa" required></div><div class="row"><div class="col-6 mb-3"><label>Valor</label><input type="number" step="0.01" class="form-control" id="valorDespesa" required></div><div class="col-6 mb-3"><label>Data</label><input type="date" class="form-control" id="dataDespesa" required></div></div><button type="submit" class="btn btn-danger w-100 fw-bold">Salvar</button></form></div></div></div></div>
+
     <div class="modal fade" id="modalMeta" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content text-white"><div class="modal-header border-0 pb-0"><h5 class="modal-title fw-bold text-primary">Novo Objetivo</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button></div><div class="modal-body p-4"><form id="formMeta"><input type="hidden" id="idMeta"><div class="mb-3"><label>Nome da Meta</label><input type="text" class="form-control" id="nomeMeta" placeholder="Ex: Viagem" required></div><div class="row"><div class="col-6 mb-3"><label>Valor Meta</label><input type="number" step="0.01" class="form-control" id="valorMeta" required></div><div class="col-6 mb-3"><label>Já guardado</label><input type="number" step="0.01" class="form-control" id="valorAtual" value="0" required></div></div><div class="mb-3"><label>Data Limite</label><input type="date" class="form-control" id="dataLimite" required></div><button type="submit" class="btn btn-primary w-100 fw-bold">Salvar Meta</button></form></div></div></div></div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="script.js"></script>
