@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinControl | Login</title>
+    <link rel="icon" type="image/png" href="logo-fincontrol.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <style>
+        body { height: 100vh; display: flex; align-items: center; justify-content: center; background-color: #0b0e14; font-family: 'Inter', sans-serif; }
+        .login-card { width: 100%; max-width: 400px; background-color: #161b22; border: 1px solid #30363d; border-radius: 24px; padding: 40px; }
+        .form-control { background-color: #0d1117; border: 1px solid #30363d; color: white; border-radius: 12px; padding: 12px; }
+        .form-control:focus { border-color: #3b82f6; box-shadow: none; background-color: #0d1117; color: white; }
+        .btn-primary { background-color: #3b82f6; border: none; border-radius: 12px; padding: 12px; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <div class="login-card shadow-lg text-center">
+        <img src="logo-fincontrol.png" alt="Logo" style="height: 70px; margin-bottom: 20px;">
+        <form id="formLogin">
+            <div class="mb-3 text-start"><label class="small text-secondary fw-bold">E-MAIL</label><input type="email" class="form-control" id="email" required></div>
+            <div class="mb-4 text-start"><label class="small text-secondary fw-bold">SENHA</label><input type="password" class="form-control" id="senha" required></div>
+            <button type="submit" class="btn btn-primary w-100">Entrar</button>
+        </form>
+    </div>
+    <script>
+        const URL_BACKEND = 'https://raye-bloomy-connectedly.ngrok-free.dev';
+
+        document.getElementById('formLogin').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const senha = document.getElementById('senha').value;
+            
+            try {
+                const res = await fetch(`${URL_BACKEND}/usuarios/login`, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' }, 
+                    body: JSON.stringify({ email, senha }) 
+                });
+                
+                if (res.ok) {
+                    const user = await res.json();
+                    localStorage.setItem('usuarioId', user.id);
+                    localStorage.setItem('usuarioNome', user.nome);
+                    window.location.href = 'index.html';
+                } else { 
+                    Swal.fire({ icon: 'error', title: 'Ops...', text: 'E-mail ou senha incorretos!', background: '#161b22', color: '#fff' }); 
+                }
+            } catch (erro) {
+                console.error("Erro:", erro);
+                Swal.fire({ icon: 'error', title: 'Servidor Offline', text: 'Não foi possível conectar.', background: '#161b22', color: '#fff' });
+            }
+        });
+    </script>
+</body>
+</html>
